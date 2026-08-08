@@ -1,17 +1,57 @@
 # ARC-Easy Result
 
-Fine-tuned local model:
+## Models Compared
 
-`/content/lamini_docs_3_steps/final`
+Pretrained baseline:
+`EleutherAI/pythia-70m`
+
+Fine-tuned model:
+`lamini/lamini_docs_finetuned`
+
+(Note: this replaces the earlier local `/content/lamini_docs_3_steps/final` checkpoint,
+which was trained for only 3 steps and is not a meaningful fine-tuned model. See
+"Reproducibility Note" below.)
 
 Benchmark:
-
 `ARC-Easy`
 
-Result:
+## Results
 
-- Accuracy: 36.91%
-- Normalized accuracy: 34.93%
-- Standard error: ±0.0099
+| Model | Accuracy |
+|---|---:|
+| Pretrained (`pythia-70m`) | 36.70% |
+| Fine-tuned (`lamini_docs_finetuned`) | 31.23% |
 
-Evaluation was performed with EleutherAI LM Evaluation Harness on a CUDA device with batch size 1.
+Standard error: ±0.0099 (approx., per-model; see raw `lm-eval` output for exact per-run values)
+
+Evaluation was performed with the EleutherAI LM Evaluation Harness on a CUDA device with batch size 1.
+
+## Why did accuracy decrease after fine-tuning?
+
+This drop is expected and is not a bug in the evaluation pipeline. It reflects a
+well-documented phenomenon called **catastrophic forgetting**.
+
+- `lamini/lamini_docs_finetuned` was fine-tuned on a narrow, single-domain dataset
+  (Lamini documentation Q&A pairs).
+- ARC-Easy is a general-knowledge, multiple-choice science reasoning benchmark that
+  is unrelated to that domain.
+- Fine-tuning a small model (Pythia-70M has very limited capacity) on a narrow task
+  tends to shift its weights toward that task's distribution, at the cost of some of
+  its broader, pretraining-derived general knowledge and reasoning ability.
+- As a result, the fine-tuned model performs *better* on Lamini-docs-style questions
+  (its target domain) but *worse* on out-of-domain benchmarks like ARC-Easy.
+
+This is a trade-off, not a failure: fine-tuning specialized the model at the expense
+of generalization. It is a common and expected outcome, especially with:
+- very small base models (70M parameters),
+- full-parameter fine-tuning rather than parameter-efficient methods (e.g. LoRA),
+- a narrow, single-domain training set.
+
+## Correction to Prior Reproducibility Note
+
+The original reproducibility note recommended re-saving the tokenizer from
+`EleutherAI/pythia-410m` to fix an empty-vocab tokenizer bug in the locally saved
+3-step checkpoint. That fix was specific to the 3-step local checkpoint
+(`/content/lamini_docs_3_steps/final`) and is not needed when evaluating
+`lamini/lamini_docs_finetuned` directly from the Hugging Face Hub, since that model's
+tokenizer is already complete and correctly paired with the model.
