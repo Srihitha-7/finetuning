@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+*.env
+secrets.json
+credentials.json
+
+# Hugging Face / ML caches
+.cache/
+.cache/
+huggingface/
+transformers_cache/
+
+# Model checkpoints and large artifacts
+checkpoint-*/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+
+# Local training outputs
+lamini_docs_3_steps/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
