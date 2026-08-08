@@ -10,10 +10,11 @@ The workflow covers:
 2. Tokenizing the data.
 3. Splitting the dataset into training and test sets.
 4. Loading a pretrained Pythia language model.
-5. Fine-tuning the model with Hugging Face Transformers.
-6. Saving the fine-tuned model locally.
-7. Testing the fine-tuned model on Lamini Docs questions.
-8. Evaluating the fine-tuned model on the **ARC-Easy** benchmark.
+5. Fine-tuning the model with Hugging Face Transformers (short demonstration run).
+6. Comparing the pretrained baseline against a fully fine-tuned model
+   (`lamini/lamini_docs_finetuned`) on both in-domain and out-of-domain evaluation.
+7. Evaluating both models on the **ARC-Easy** benchmark to measure the effect of
+   fine-tuning on general reasoning ability.
 
 The project was developed in Google Colab using a GPU runtime.
 
@@ -34,21 +35,23 @@ Tokenization
 Train / Test Split
         |
         v
-Pretrained Pythia Model
+Pretrained Pythia Model (EleutherAI/pythia-70m)
         |
-        v
-Hugging Face Trainer
-        |
-        v
-Fine-Tuned Model
-        |
-        +----------------------+
-        |                      |
-        v                      v
-Lamini Docs Evaluation     ARC-Easy Benchmark
-        |                      |
-        v                      v
-Exact-Match Evaluation     Accuracy = 36.91%
+        +----------------------------+
+        |                            |
+        v                            v
+Short local training run        Reference fine-tuned model
+(3 steps, demo only)             (lamini/lamini_docs_finetuned)
+                                       |
+                    +------------------+------------------+
+                    |                                     |
+                    v                                     v
+        Lamini Docs Evaluation                     ARC-Easy Benchmark
+        (exact-match, in-domain)                (general reasoning, out-of-domain)
+                    |                                     |
+                    v                                     v
+        Fine-tuned model wins                Pretrained: 36.70%
+        on domain questions                  Fine-tuned: 31.23%
 ```
 
 ---
@@ -62,7 +65,19 @@ Model: EleutherAI/pythia-70m
 Maximum sequence length: 2048 tokens
 ```
 
-> **Note:** Some later experimental cells in the notebook refer to `EleutherAI/pythia-410m`. The main fine-tuning configuration in the notebook uses **Pythia-70M**, so the README identifies Pythia-70M as the primary training model.
+Two versions of "fine-tuned" appear in the notebook and it's important to distinguish them:
+
+1. **Local demo checkpoint** — trained in-notebook for only 3 steps
+   (`lamini_docs_3_steps/final`). This exists purely to illustrate the training loop
+   and is *not* a meaningfully fine-tuned model — 3 steps is far too few to change
+   model behavior noticeably.
+2. **Reference fine-tuned model** — `lamini/lamini_docs_finetuned`, a properly
+   fine-tuned checkpoint on the full dataset. **This is the model used for the actual
+   pretrained-vs-fine-tuned comparison and for the results reported below.**
+
+> **Note:** Some earlier experimental cells in the notebook referenced
+> `EleutherAI/pythia-410m`. The primary training/evaluation configuration uses
+> **Pythia-70M** throughout; the tokenizer used for evaluation must match this model.
 
 ---
 
@@ -91,13 +106,8 @@ lamini_docs.jsonl
 lamini_docs_processed.jsonl
 ```
 
-The notebook also prepares an Alpaca-style dataset:
-
-```text
-alpaca_processed.jsonl
-```
-
-but the primary fine-tuning workflow uses the Lamini Docs dataset.
+The notebook also prepares an Alpaca-style dataset (`alpaca_processed.jsonl`), but the
+primary fine-tuning and evaluation workflow uses the Lamini Docs dataset.
 
 ---
 
@@ -105,34 +115,18 @@ but the primary fine-tuning workflow uses the Lamini Docs dataset.
 
 The question-answer data is converted into an instruction-style format and tokenized.
 
-The tokenizer uses:
-
 ```python
 tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-70m")
 tokenizer.pad_token = tokenizer.eos_token
 ```
 
-The maximum sequence length used by the training configuration is:
+Maximum sequence length: `2048`
 
-```text
-2048
-```
-
-The tokenized dataset contains:
-
-```text
-question
-answer
-input_ids
-attention_mask
-labels
-```
+The tokenized dataset contains: `question`, `answer`, `input_ids`, `attention_mask`, `labels`.
 
 ---
 
-## Fine-Tuning Configuration
-
-The notebook performs a short demonstration fine-tuning run with:
+## Fine-Tuning Configuration (local demo run)
 
 | Parameter | Value |
 |---|---:|
@@ -151,216 +145,106 @@ The notebook performs a short demonstration fine-tuning run with:
 | Gradient checkpointing | `False` |
 | Maximum sequence length | `2048` |
 
-The model is trained using Hugging Face's `Trainer`.
-
----
-
-## Saved Model
-
-The fine-tuned model is saved locally under:
-
-```text
-lamini_docs_3_steps/final/
-```
-
-Intermediate checkpoints are stored under:
-
-```text
-lamini_docs_3_steps/checkpoint-3/
-```
-
-The final model can be loaded using:
-
-```python
-from transformers import AutoModelForCausalLM
-
-model = AutoModelForCausalLM.from_pretrained(
-    "lamini_docs_3_steps/final"
-)
-```
-
----
-
-## Inference
-
-The notebook defines an inference function that:
-
-1. Tokenizes the input question.
-2. Sends the tokens to the model.
-3. Generates output tokens.
-4. Decodes the generated tokens.
-5. Removes the original prompt from the generated text.
-
-Example:
-
-```python
-question = "What is Lamini?"
-
-answer = inference(
-    question,
-    model,
-    tokenizer
-)
-
-print(answer)
-```
+This run is a demonstration of the training loop only. All reported evaluation
+results below use `lamini/lamini_docs_finetuned`, a properly fine-tuned checkpoint,
+not this 3-step local run.
 
 ---
 
 ## Evaluation
 
-### 1. Lamini Docs Evaluation
-
-The notebook includes an exact-match evaluation:
+### 1. Lamini Docs Evaluation (in-domain, exact-match)
 
 ```python
 def is_exact_match(a, b):
     return a.strip() == b.strip()
 ```
 
-The evaluation compares:
+Predicted vs. target answers were compared for both `EleutherAI/pythia-70m`
+(pretrained) and `lamini/lamini_docs_finetuned` (fine-tuned) on the same held-out
+test set. The fine-tuned model produces answers substantially closer to the target
+Lamini docs answers than the raw pretrained model.
 
-```text
-Predicted answer
-        vs.
-Target answer
-```
-
-The notebook also loads:
-
-```text
-lamini/lamini_docs_evaluation
-```
-
-for additional evaluation exploration.
-
-### 2. ARC-Easy Benchmark
-
-The fine-tuned local model was evaluated using:
-
-**EleutherAI LM Evaluation Harness**
-
-Command:
+### 2. ARC-Easy Benchmark (out-of-domain, general reasoning)
 
 ```bash
 lm-eval run \
     --model hf \
-    --model_args pretrained=/content/lamini_docs_3_steps/final \
+    --model_args pretrained=EleutherAI/pythia-70m \
     --tasks arc_easy \
     --device cuda:0 \
-    --batch_size 1
+    --batch_size 1 \
+    --output_path /content/results_pretrained/
+
+lm-eval run \
+    --model hf \
+    --model_args pretrained=lamini/lamini_docs_finetuned \
+    --tasks arc_easy \
+    --device cuda:0 \
+    --batch_size 1 \
+    --output_path /content/results_finetuned/
 ```
 
-### Result
+### Results
 
-The fine-tuned model achieved:
+| Model | ARC-Easy Accuracy |
+|---|---:|
+| Pretrained (`pythia-70m`) | 36.70% |
+| Fine-tuned (`lamini_docs_finetuned`) | 31.23% |
 
-```text
-ARC-Easy Accuracy: 36.91%
-Normalized Accuracy: 34.93%
-Standard Error: ±0.0099
-```
+ARC-Easy has four answer choices, so random-guessing accuracy is approximately 25%.
+Both models score above chance, but the fine-tuned model scores **lower** than the
+pretrained baseline on this general benchmark.
 
-The ARC-Easy evaluation successfully processed:
+### Why did accuracy decrease after fine-tuning?
 
-```text
-2376 contexts
-9501 log-likelihood requests
-```
+This is an expected result, known as **catastrophic forgetting**, not a bug:
 
-### Interpretation
+- `lamini/lamini_docs_finetuned` was fine-tuned on a narrow, single-domain dataset
+  (Lamini documentation Q&A).
+- ARC-Easy tests general science/reasoning knowledge, unrelated to that domain.
+- Fine-tuning a small model (70M parameters, limited capacity) on a narrow task shifts
+  its weights toward that task's distribution, which can come at the cost of some
+  general knowledge retained from pretraining.
+- The net effect: the fine-tuned model improves on its target domain (Lamini docs
+  Q&A, see the exact-match evaluation above) but regresses on unrelated general
+  benchmarks like ARC-Easy.
 
-ARC-Easy has four answer choices, so random guessing is approximately:
+This specialization/generalization trade-off is well documented in the fine-tuning
+literature and is more pronounced with:
+- very small base models,
+- full-parameter fine-tuning (as opposed to parameter-efficient methods like LoRA),
+- narrow, single-domain training data.
 
-```text
-25%
-```
-
-The observed score of:
-
-```text
-36.91%
-```
-
-is above random-guessing performance.
-
-However, this result should not be described as a strong general reasoning score. The model was fine-tuned primarily on Lamini documentation Q&A data, not on ARC reasoning data.
-
-Also, a before/after comparison with the original pretrained model is required before claiming that fine-tuning improved ARC-Easy performance.
+It should be reported as a genuine finding of this project, not treated as an error
+to fix.
 
 ---
 
 ## Important Reproducibility Note
 
-The notebook was originally written around an older Lamini/Transformers workflow. During execution in a current Colab environment, several compatibility issues were encountered.
+The notebook was originally written around an older Lamini/Transformers workflow.
+Several compatibility issues were encountered when run in a current Colab
+environment, including `datasets` version/API changes, `BasicModelRunner` accepting
+only hard-coded example model names, changes in `TrainingArguments`, and removal of
+older `floating_point_ops()` usage. The final working workflow uses the standard
+Hugging Face `AutoTokenizer` / `AutoModelForCausalLM` / `TrainingArguments` /
+`Trainer` stack. The old `BasicModelRunner` demonstration cells are not required for
+the fine-tuning workflow and can be removed.
 
-Examples included:
+### Local checkpoint tokenizer issue (3-step demo run only)
 
-- `datasets` version/API changes.
-- `BasicModelRunner` accepting only the hard-coded example model names in the provided `llama.py`.
-- Changes in `TrainingArguments`.
-- Removal/incompatibility of the older `floating_point_ops()` usage.
-- Compatibility issues with older Lamini demonstration cells.
-
-For the final working workflow, the project uses the Hugging Face:
-
-```text
-AutoTokenizer
-AutoModelForCausalLM
-TrainingArguments
-Trainer
-```
-
-workflow.
-
-The old `BasicModelRunner` demonstration cells are not required for the final Hugging Face fine-tuning workflow.
-
----
-
-## ARC-Easy Tokenizer Fix
-
-During ARC-Easy evaluation, the tokenizer saved in the final directory was found to be incomplete:
-
-```text
-Vocab size: 2
-Number of tokens: 0
-```
-
-This caused the evaluation harness to fail because it received an empty encoded context.
-
-The tokenizer was replaced with the original Pythia tokenizer:
-
-```python
-from transformers import AutoTokenizer
-
-tokenizer = AutoTokenizer.from_pretrained(
-    "EleutherAI/pythia-410m"
-)
-
-tokenizer.pad_token = tokenizer.eos_token
-
-tokenizer.save_pretrained(
-    "/content/lamini_docs_3_steps/final"
-)
-```
-
-The corrected tokenizer produced:
-
-```text
-Vocab size: 50254
-```
-
-and successfully tokenized ARC prompts.
-
-After this correction, the ARC-Easy evaluation completed successfully.
-
-> When reproducing the experiment, make sure the tokenizer matches the actual base model used for fine-tuning. The notebook's primary training configuration uses Pythia-70M; therefore, if reproducing the primary workflow exactly, use the corresponding Pythia-70M tokenizer rather than substituting a different Pythia model.
+During early experimentation, the tokenizer saved alongside the local 3-step
+checkpoint (`lamini_docs_3_steps/final`) was found to be incomplete (vocab size of 2),
+which caused evaluation to fail. This was specific to that local checkpoint and was
+not an issue with `lamini/lamini_docs_finetuned`, whose tokenizer is complete and
+correctly paired with the model. **The final reported ARC-Easy results use
+`lamini/lamini_docs_finetuned` directly from the Hugging Face Hub and do not require
+any tokenizer patching.**
 
 ---
 
 ## Repository Structure
-
-A recommended GitHub structure is:
 
 ```text
 finetuned-llm/
@@ -380,34 +264,23 @@ finetuned-llm/
 │   └── README.md
 │
 └── results/
-    └── arc_easy_results.txt
+    └── results_arc_easy.txt
 ```
 
 ### Do not commit
 
-Avoid committing:
-
-```text
-API keys
-.env files
-Colab secrets
-private credentials
-large model checkpoints
-```
-
-The fine-tuned model directory can be several hundred MB or more, so it is generally better to store large model artifacts separately rather than committing them directly to a normal GitHub repository.
+Avoid committing API keys, `.env` files, Colab secrets, private credentials, or large
+model checkpoints. Store large model artifacts separately from the Git repository.
 
 ---
 
 ## Installation
 
-Create a Python environment and install the required packages:
-
 ```bash
 pip install -r requirements.txt
 ```
 
-For Google Colab, the notebook can be run using a GPU runtime.
+For Google Colab, run the notebook using a GPU runtime.
 
 ---
 
@@ -415,13 +288,8 @@ For Google Colab, the notebook can be run using a GPU runtime.
 
 ### 1. Prepare the dataset
 
-Use the notebook to load/process:
-
-```text
-lamini_docs.jsonl
-```
-
-and generate the processed training data.
+Use the notebook to load/process `lamini_docs.jsonl` and generate the processed
+training data.
 
 ### 2. Load the pretrained model
 
@@ -433,16 +301,14 @@ model_name = "EleutherAI/pythia-70m"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 tokenizer.pad_token = tokenizer.eos_token
 
-model = AutoModelForCausalLM.from_pretrained(model_name)
+pretrained_model = AutoModelForCausalLM.from_pretrained(model_name)
 ```
 
-### 3. Train
-
-Configure `TrainingArguments` and create a Hugging Face `Trainer`.
+### 3. Train (local demo run)
 
 ```python
 trainer = Trainer(
-    model=model,
+    model=pretrained_model,
     args=training_args,
     train_dataset=train_dataset,
     eval_dataset=test_dataset
@@ -451,24 +317,17 @@ trainer = Trainer(
 trainer.train()
 ```
 
-### 4. Save
+### 4. Load the reference fine-tuned model for comparison
 
 ```python
-trainer.save_model("lamini_docs_3_steps/final")
+finetuned_model = AutoModelForCausalLM.from_pretrained("lamini/lamini_docs_finetuned")
+tokenizer = AutoTokenizer.from_pretrained("lamini/lamini_docs_finetuned")
 ```
 
-### 5. Evaluate
+### 5. Evaluate both models
 
-Run the ARC-Easy benchmark:
-
-```bash
-lm-eval run \
-    --model hf \
-    --model_args pretrained=/path/to/final \
-    --tasks arc_easy \
-    --device cuda:0 \
-    --batch_size 1
-```
+Run exact-match evaluation on the Lamini docs test set for both models, and run the
+ARC-Easy benchmark for both models (see commands above).
 
 ---
 
@@ -491,13 +350,15 @@ lm-eval run \
 
 ## Limitations
 
-1. The demonstrated fine-tuning run uses only a small number of training steps (`3`), so it is primarily an educational demonstration.
-2. The model is small compared with modern large language models.
-3. Fine-tuning on documentation Q&A data does not specifically optimize the model for ARC reasoning.
-4. ARC-Easy performance alone does not measure documentation question-answer quality.
-5. A pretrained-vs-fine-tuned comparison is required to determine whether fine-tuning improves general benchmark performance.
-6. The notebook contains older Lamini demonstration code that may not work unchanged with current library versions.
+1. The local demonstration fine-tuning run uses only 3 training steps and is for
+   illustrating the training loop only — it is not the model used for reported results.
+2. The model is small (70M parameters) compared with modern LLMs, making it more
+   susceptible to catastrophic forgetting during fine-tuning.
+3. Fine-tuning on documentation Q&A data does not optimize the model for ARC-style
+   reasoning, and in fact trades off against it.
+4. ARC-Easy performance alone does not measure documentation question-answer quality;
+   both the in-domain (exact-match) and out-of-domain (ARC-Easy) results are needed
+   for a complete picture.
 
 ---
-
 
