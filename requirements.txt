@@ -1,0 +1,8 @@
+torch
+transformers
+datasets
+jsonlines
+pandas
+tqdm
+pyyaml
+lm_eval[hf]
