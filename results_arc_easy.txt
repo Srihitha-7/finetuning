@@ -1,0 +1,17 @@
+# ARC-Easy Result
+
+Fine-tuned local model:
+
+`/content/lamini_docs_3_steps/final`
+
+Benchmark:
+
+`ARC-Easy`
+
+Result:
+
+- Accuracy: 36.91%
+- Normalized accuracy: 34.93%
+- Standard error: ±0.0099
+
+Evaluation was performed with EleutherAI LM Evaluation Harness on a CUDA device with batch size 1.
